@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>N Clock Browser</title>
+    <style>
+        :root {
+            --accent: #00ff41; /* ネオングリーン */
+            --bg: #0d0d0d;
+        }
+        body, html {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            background: var(--bg);
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+        }
+
+        /* ブラウザエリア */
+        #browser-container {
+            width: 100%; height: 100vh;
+            border: none;
+        }
+
+        /* フローティング・コントロールパネル */
+        #n-clock-panel {
+            position: fixed;
+            top: 10px; left: 10px; right: 10px;
+            background: rgba(13, 13, 13, 0.9);
+            border: 1px solid var(--accent);
+            box-shadow: 0 0 15px var(--accent);
+            border-radius: 10px;
+            padding: 15px;
+            z-index: 1000;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+
+        /* 格納時のスタイル */
+        #n-clock-panel.minimized {
+            width: 60px; height: 60px;
+            right: auto;
+            border-radius: 50%;
+            overflow: hidden;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            opacity: 0.7;
+        }
+
+        .clock-display {
+            font-size: 2rem;
+            color: var(--accent);
+            text-align: center;
+            text-shadow: 0 0 5px var(--accent);
+        }
+
+        .controls {
+            margin-top: 10px;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+
+        input[type="range"] {
+            width: 100%; accent-color: var(--accent);
+        }
+
+        .url-bar {
+            display: flex; gap: 5px; margin-top: 10px;
+        }
+
+        input[type="text"] {
+            flex-grow: 1;
+            background: #000; border: 1px solid var(--accent);
+            color: var(--accent); padding: 5px;
+        }
+
+        button {
+            background: var(--accent); color: #000;
+            border: none; padding: 5px 10px; font-weight: bold;
+            cursor: pointer;
+        }
+
+        .toggle-btn {
+            position: absolute; top: 5px; right: 10px;
+            color: var(--accent); cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ブラウザエリア -->
+    <iframe id="browser-container" src="https://www.bing.com"></iframe>
+
+    <!-- N Clock パネル -->
+    <div id="n-clock-panel">
+        <div class="toggle-btn" onclick="togglePanel()">[_]</div>
+        
+        <div id="full-ui">
+            <div class="clock-display" id="clock">00:00:00</div>
+            <div class="controls">
+                <label style="color: var(--accent); font-size: 0.8rem;">N-Speed: <span id="n-value">24</span></label>
+                <input type="range" id="n-slider" min="1" max="48" value="24" step="1">
+                
+                <div class="url-bar">
+                    <input type="text" id="url-input" placeholder="URLを入力 (https://...)">
+                    <button onclick="loadUrl()">GO</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 格納時のみ表示される小さな数字 -->
+        <div id="mini-ui" style="display: none; color: var(--accent); font-weight: bold;">
+            N<span id="mini-n">24</span>
+        </div>
+    </div>
+
+    <script>
+        let currentN = 24;
+        let virtualTime = new Date();
+        const clockEl = document.getElementById('clock');
+        const nValueEl = document.getElementById('n-value');
+        const miniNEl = document.getElementById('mini-n');
+        const slider = document.getElementById('n-slider');
+        const panel = document.getElementById('n-clock-panel');
+        const fullUI = document.getElementById('full-ui');
+        const miniUI = document.getElementById('mini-ui');
+        const iframe = document.getElementById('browser-container');
+
+        // 時間更新ロジック (N Clockの核)
+        setInterval(() => {
+            const ratio = 24 / currentN;
+            virtualTime = new Date(virtualTime.getTime() + (1000 * ratio));
+            
+            const h = String(virtualTime.getHours()).padStart(2, '0');
+            const m = String(virtualTime.getMinutes()).padStart(2, '0');
+            const s = String(virtualTime.getSeconds()).padStart(2, '0');
+            clockEl.innerText = `${h}:${m}:${s}`;
+        }, 1000);
+
+        // スライダー連動
+        slider.addEventListener('input', (e) => {
+            currentN = e.target.value;
+            nValueEl.innerText = currentN;
+            miniNEl.innerText = currentN;
+        });
+
+        // パネルの開閉
+        function togglePanel() {
+            panel.classList.toggle('minimized');
+            if (panel.classList.contains('minimized')) {
+                fullUI.style.display = 'none';
+                miniUI.style.display = 'block';
+            } else {
+                fullUI.style.display = 'block';
+                miniUI.style.display = 'none';
+            }
+        }
+
+        // URL読み込み
+        function loadUrl() {
+            let url = document.getElementById('url-input').value;
+            if (!url.startsWith('http')) url = 'https://' + url;
+            iframe.src = url;
+        }
+    </script>
+</body>
+</html>
