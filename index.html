@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>N Clock Browser - 統合版</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        /* あなたのstyle.cssをベースに、ブラウザ対応用に調整 */
+        body {
+            background-color: #fff;
+            color: #000;
+            font-family: 'Roboto', -apple-system, sans-serif;
+            margin: 0; padding: 0;
+            height: 100vh; overflow: hidden;
+        }
+
+        /* 背面のブラウザ窓 */
+        #browser-container {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: calc(100vh - 100px); /* 広告とタブの高さを考慮 */
+            border: none; z-index: 1;
+        }
+
+        /* N ClockのUIを最前面へ、かつ操作を邪魔しないように設定 */
+        .n-clock-app {
+            position: relative;
+            width: 100%; height: 100vh;
+            display: flex; flex-direction: column;
+            z-index: 10; pointer-events: none; /* 下のブラウザを触れるように */
+        }
+
+        .content-area {
+            flex-grow: 1;
+            padding: 20px;
+            pointer-events: auto; /* UI部分は触れるように */
+            background: rgba(255, 255, 255, 0.8); /* ブラウザが透けるように調整 */
+            backdrop-filter: blur(5px);
+            margin: 10px; border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            max-height: 70vh; overflow-y: auto;
+        }
+
+        /* 非表示用 */
+        .hidden { display: none !important; }
+
+        /* タブバー・広告（あなたのデザインを維持） */
+        .tab-bar, .ad-container-bottom { pointer-events: auto; }
+        
+        .tab-bar {
+            position: fixed; bottom: 50px;
+            width: 100%; display: flex; justify-content: space-around;
+            padding: 15px 0; border-top: 1px solid #ccc;
+            background-color: #f7f7f7; z-index: 20;
+        }
+
+        .ad-container-bottom {
+            position: fixed; bottom: 0;
+            width: 100%; height: 50px;
+            background-color: #f0f0f0; border-top: 1px solid #ddd;
+            display: flex; justify-content: center; align-items: center;
+            z-index: 25; font-size: 12px; color: #888;
+        }
+
+        .tab-item { background: none; border: none; color: #888; font-size: 16px; cursor: pointer; }
+        .tab-item.active { color: #000; font-weight: 700; }
+
+        /* 時計・スライダー（あなたの数値を維持） */
+        .clock-display { font-size: 80px; text-align: center; margin: 20px 0; font-weight: 700; }
+        .mode-title { font-size: 24px; font-weight: 900; text-align: center; }
+        
+        input[type=range] { -webkit-appearance: none; width: 100%; height: 10px; background: #ccc; border-radius: 5px; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 32px; width: 32px; border-radius: 50%; background: #000; }
+
+        /* URL入力用（追加機能） */
+        .url-bar { display: flex; gap: 5px; margin-bottom: 10px; }
+        .url-bar input { flex-grow: 1; border: 1px solid #ccc; border-radius: 8px; padding: 8px; }
+        .url-bar button { background: #000; color: #fff; border: none; border-radius: 8px; padding: 8px 15px; }
+
+    </style>
+</head>
+<body>
+
+    <!-- あなたのデザインしたアプリ構造 -->
+    <div class="n-clock-app">
+        
+        <!-- コンテンツエリア（ここがブラウザの上に浮かぶ） -->
+        <div id="content-area" class="content-area">
+            <div class="url-bar">
+                <input type="text" id="url-input" placeholder="URLを入力 (https://...)">
+                <button onclick="loadUrl()">閲覧開始</button>
+            </div>
+            
+            <div id="clock-view">
+                <div class="mode-title">時計</div>
+                <div class="clock-display" id="clock-txt">00:00:00</div>
+                <div style="text-align: center; margin-bottom: 10px;">N値: <span id="n-display">24</span></div>
+                <input type="range" id="n-slider" min="1" max="48" value="24" step="1">
+            </div>
+
+            <div id="other-view" class="hidden">
+                <div class="mode-title">準備中</div>
+                <p style="text-align:center;">ストップウォッチ等の機能もここに統合可能です。</p>
+            </div>
+        </div>
+
+        <nav class="tab-bar">
+            <button id="nav-clock" class="tab-item active" onclick="showTab('clock')">時計</button>
+            <button id="nav-stopwatch" class="tab-item" onclick="showTab('other')">ストップウォッチ</button>
+            <button id="nav-settings" class="tab-item" onclick="showTab('other')">設定</button>
+        </nav>
+        
+        <div class="ad-container-bottom">広告エリア</div>
+    </div>
+
+    <!-- 背面のブラウザ本体 -->
+    <iframe id="browser-container" src="https://www.bing.com"></iframe>
+
+    <script>
+        // N Clock ロジックの維持
+        let currentN = 24;
+        let virtualTime = new Date();
+        const clockTxt = document.getElementById('clock-txt');
+        const nDisplay = document.getElementById('n-display');
+        const nSlider = document.getElementById('n-slider');
+
+        setInterval(() => {
+            const ratio = 24 / currentN;
+            virtualTime = new Date(virtualTime.getTime() + (1000 * ratio));
+            const h = String(virtualTime.getHours()).padStart(2, '0');
+            const m = String(virtualTime.getMinutes()).padStart(2, '0');
+            const s = String(virtualTime.getSeconds()).padStart(2, '0');
+            clockTxt.innerText = `${h}:${m}:${s}`;
+        }, 1000);
+
+        nSlider.addEventListener('input', (e) => {
+            currentN = e.target.value;
+            nDisplay.innerText = currentN;
+        });
+
+        // タブ切り替えロジック
+        function showTab(type) {
+            document.querySelectorAll('.tab-item').forEach(b => b.classList.remove('active'));
+            if(type === 'clock') {
+                document.getElementById('nav-clock').classList.add('active');
+                document.getElementById('clock-view').classList.remove('hidden');
+                document.getElementById('other-view').classList.add('hidden');
+            } else {
+                event.target.classList.add('active');
+                document.getElementById('clock-view').classList.add('hidden');
+                document.getElementById('other-view').classList.remove('hidden');
+            }
+        }
+
+        // ブラウザ操作
+        function loadUrl() {
+            let url = document.getElementById('url-input').value;
+            if (!url.startsWith('http')) url = 'https://' + url;
+            document.getElementById('browser-container').src = url;
+            // URL読み込み後は時計を邪魔にならないよう少し透過させるなどの演出も可能
+        }
+    </script>
+</body>
+</html>
